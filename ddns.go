@@ -24,16 +24,15 @@ type Config struct {
 	Password string `yaml:"Password"`
 	// How many seconds in between checks
 	Frequency uint `yaml:"Frequency"`
-	debug     bool `yaml:"debug"`
+	Debug     bool `yaml:"Debug"`
 }
 
 func main() {
-	//var v int
-	path := *flag.String("config", "/etc/ddns.conf", "path to config file, eg. /home/user/ddns.conf")
-	v := *flag.Int("v", -1, "Print out debug messages, 0=no debug, 1=debug on")
+	path := flag.String("config", "/etc/ddns.conf", "path to config file, eg. /home/user/ddns.conf")
+	v := flag.Int("v", -1, "Print out debug messages, 0=no debug, 1=debug on")
 	flag.Parse()
 
-	conf, err := ioutil.ReadFile(path)
+	conf, err := ioutil.ReadFile(*path)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -44,14 +43,14 @@ func main() {
 		log.Fatal(err)
 	}
 
-	if v != -1 { // command line takes presendence over config file
-		if v == 0 {
+	if *v != -1 { // command line takes presendence over config file
+		if *v == 0 {
 			debug = false
 		} else {
 			debug = true
 		}
 	} else {
-		debug = c.debug // default false
+		debug = c.Debug // default false
 	}
 
 	client := &http.Client{}
