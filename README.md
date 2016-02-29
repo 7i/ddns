@@ -1,5 +1,6 @@
 # ddns
 Simple ddns updater to update the current ip for a domain.
+Will check external IP, works for servers behind NAT.
 Only supports basic auth.
 
 # Install:
