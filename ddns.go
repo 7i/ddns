@@ -1,12 +1,14 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/miekg/dns"
@@ -16,9 +18,9 @@ import (
 var debug bool
 
 type Config struct {
-	// Your domain name
-	Domain string `yaml:"Domain"`
-	// Your ddns update url eg. "https://dyndns.binero.se/nic/update?hostname=*.example.com"
+	// Your domain names
+	Domains []string `yaml:"Domains"`
+	// Your ddns update url eg. "https://dyndns.binero.se/nic/update?hostname="
 	DdnsUrl  string `yaml:"DdnsUrl"`
 	Username string `yaml:"Username"`
 	Password string `yaml:"Password"`
@@ -27,6 +29,17 @@ type Config struct {
 	Debug     bool `yaml:"Debug"`
 }
 
+/* Exampel ddns.conf:
+
+Domains:
+ - example.com
+ - example2.com
+DdnsUrl: "https://dyndns.binero.se/nic/update?hostname="
+Username: "user"
+Password: "asdf"
+Frequency: 60 # Seconds between checks
+Debug: false # Print out debug info
+*/
 func main() {
 	path := flag.String("config", "/etc/ddns.conf", "path to config file, eg. /home/user/ddns.conf")
 	v := flag.Int("v", -1, "Print out debug messages, 0=no debug, 1=debug on")
@@ -53,43 +66,77 @@ func main() {
 		debug = c.Debug // default false
 	}
 
-	client := &http.Client{}
-	req, err := http.NewRequest("GET", c.DdnsUrl, nil)
-	if err != nil {
-		log.Fatalln("Error while constructing request:", err)
-	}
-
 	if c.Frequency < 1 { // Default value is 60s update check
 		c.Frequency = 60
 	}
 
+	go updateService(c)
+
+	scanner := bufio.NewScanner(os.Stdin)
+	for scanner.Scan() {
+		if scanner.Text() == "exit" || scanner.Text() == "quit" || scanner.Text() == "q" {
+			break
+		}
+	}
+}
+
+func updateService(c Config) {
+	if len(c.Domains) < 1 {
+		log.Fatalln("No domains in config file")
+	}
+	if debug {
+		for _, domain := range c.Domains {
+			fmt.Println("Starting updateService for " + domain)
+		}
+	}
+
 	for {
-		ip := getExternalIP()
-		ips, err := net.LookupIP(c.Domain)
-		if ip == "" || len(ips) == 0 {
-			if debug {
-				fmt.Println("DNS Error: ", err)
+		externalIP := getExternalIP()
+
+		for _, domain := range c.Domains {
+			ips, err := net.LookupIP(domain)
+			if externalIP == "" || len(ips) == 0 {
+				if debug {
+					fmt.Println("DNS Error: ", err)
+				}
+				continue
 			}
-			continue
-		}
-		set := true
-		for _, i := range ips {
-			if i.String() == ip {
-				set = false
+			set := true
+			for _, i := range ips {
+				if i.String() == externalIP {
+					set = false
+					break
+				}
 			}
-		}
-		if set {
-			setIP(client, req, c)
-			if debug {
-				log.Println("New IP for", c.Domain, ":", ip)
+			if set {
+				mainDomain, err := http.NewRequest("GET", c.DdnsUrl+domain, nil)
+				if err != nil {
+					log.Println("Error while constructing request:", err)
+				} else {
+					setIP(mainDomain, c.Username, c.Password)
+					if debug {
+						log.Println("New IP for", domain, ":", externalIP)
+					}
+				}
+
+				subDomains, err := http.NewRequest("GET", c.DdnsUrl+"*."+domain, nil)
+				if err != nil {
+					log.Println("Error while constructing request:", err)
+				} else {
+					setIP(subDomains, c.Username, c.Password)
+					if debug {
+						log.Println("New IP for", "*."+domain, ":", externalIP)
+					}
+				}
 			}
 		}
 		time.Sleep(time.Duration(c.Frequency) * time.Second)
 	}
 }
 
-func setIP(client *http.Client, req *http.Request, c Config) {
-	req.SetBasicAuth(c.Username, c.Password)
+func setIP(req *http.Request, username, password string) {
+	client := &http.Client{}
+	req.SetBasicAuth(username, password)
 	res, err := client.Do(req)
 	if err != nil && debug {
 		log.Println(err)
