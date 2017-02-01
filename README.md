@@ -1,6 +1,7 @@
 # ddns
-Simple ddns updater to update the current ip for a domain.
-Will check external IP, also works for servers behind NAT.
+Simple ddns updater. 
+Will update the IP for domains and subdomains to the current external IP.
+Will check external IP via a DNS request to server resolver1.opendns.com with target myip.opendns.com.
 Only supports basic auth.
 
 # Install:
@@ -31,8 +32,10 @@ $ ddns -v 1
 
 Example ddns.conf:
 ```
-Domain : "example.com" 
-DdnsUrl : "https://dyndns.binero.se/nic/update?hostname=*.example.com"
+Domains: # The following domains will be added at the end of the DdnsUrl string.
+ - example.com
+ - example2.com
+DdnsUrl : "https://dyndns.binero.se/nic/update?hostname="
 Username : "username"
 Password : "password"
 Frequency : 60 # Seconds between checks
